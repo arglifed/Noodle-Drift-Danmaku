@@ -1,0 +1,27 @@
+{
+  "short_name": "NoodleDrift",
+  "name": "Noodle Drift: Four Swords Edition",
+  "icons": [
+    {
+      "src": "bowl.png",
+      "sizes": "64x64",
+      "type": "image/png"
+    },
+    {
+      "src": "bowl.png",
+      "sizes": "192x192",
+      "type": "image/png",
+      "purpose": "any maskable"
+    },
+    {
+      "src": "bowl.png",
+      "sizes": "512x512",
+      "type": "image/png"
+    }
+  ],
+  "start_url": "./noodle_drift_danmaku.html",
+  "background_color": "#050505",
+  "theme_color": "#00ffff",
+  "display": "standalone",
+  "orientation": "portrait"
+}
