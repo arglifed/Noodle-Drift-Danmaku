@@ -39,7 +39,7 @@ You control a ramen bowl drifting through a high-speed soup stream.
 
 ## 🚀 How to Play
 
-\*\*Play it instantly in your browser here:\*\* 👉
+\*\*Play it instantly in your browser here:\*\* 👉 https://arglifed.github.io/Noodle-Drift-Danmaku/
 
 
 \## 🚀 Setup
