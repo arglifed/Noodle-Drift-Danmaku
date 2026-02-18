@@ -54,5 +54,5 @@ You control a ramen bowl drifting through a high-speed soup stream.
 
 ---
 
-\*Built for the Four Swords Ramen Arcade.\*
+\*Built for the Four Swords Retropub.\*
 
