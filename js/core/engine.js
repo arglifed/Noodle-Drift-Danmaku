@@ -9,11 +9,17 @@ canvas.height = 700;
 const bowlImg = new Image();
 bowlImg.src = 'assets/images/bowl.png'; 
 
-let score = 0;
+// Game State Flags
+let gameStarted = false; 
 let gameActive = true;
+let score = 0;
+let combo = 0;
+let comboTimer = 0;
 let scrollPos = 0;
 let speed = 4.5;
 let frame = 0;
+const IMPACT_RATIO = 100; // 100 Score = 1 Impact Point
+
 let highScores = JSON.parse(localStorage.getItem('fs_high_scores')) || [];
 
 const player = { x: 200, y: 550, w: 64, h: 64, vx: 0, drifting: false, rotation: 0, hitboxRadius: 4 };
@@ -47,6 +53,7 @@ function saveHighScore(s) {
 }
 
 function spawn() {
+    if (!gameStarted || !gameActive) return;
     const difficulty = Math.min(score / 12000, 1); 
     if (frame % Math.max(30, Math.floor(85 - (difficulty * 55))) === 0) {
         obstacles.push({ x: Math.random() * (canvas.width - 32), y: -50, w: 32, h: 32 });
@@ -61,13 +68,16 @@ function spawn() {
 }
 
 function update() {
-    if (!gameActive) return;
+    if (!gameStarted || !gameActive) return;
     frame++;
     speed = 4.5 + (score / 2000); 
     scrollPos = (scrollPos + speed) % 80; 
     
-    // Base engagement score
     score += 0.25;
+
+    // Combo Decay Logic
+    if (comboTimer > 0) comboTimer--;
+    else combo = 0;
 
     if (player.drifting) {
         player.vx += 0.8; 
@@ -77,10 +87,8 @@ function update() {
         player.rotation = Math.max(player.rotation - 0.06, -0.35);
     }
 
-    // COMPANION HOOK: Barnaby increases momentum retention (e.g., 0.96 vs 0.94)
     const currentFriction = (activeCompanion) ? activeCompanion.driftMomentum : 0.94;
     player.vx *= currentFriction; 
-    
     player.x += player.vx;
 
     if (player.x < -5 || player.x > canvas.width - player.w + 5) {
@@ -98,9 +106,10 @@ function update() {
             gameActive = false;
             saveHighScore(score);
         } else if (dist < 50 && frame % 5 === 0) {
-            // COMPANION HOOK: Points from grazes are boosted by multiplier
+            combo++;
+            comboTimer = 60;
             const multiplier = (activeCompanion) ? activeCompanion.scoreMultiplier : 1.0;
-            score += 10 * multiplier; 
+            score += (10 * multiplier) * (1 + (combo * 0.1)); 
             grazes.push({ x: px + 20, y: py - 20, life: 1.0 });
         }
         if (obs.y > canvas.height) obstacles.splice(i, 1);
@@ -109,9 +118,10 @@ function update() {
     medals.forEach((m, i) => {
         m.y += speed;
         if (Math.hypot(px - (m.x + m.w/2), py - (m.y + m.h/2)) < 38) {
-            // COMPANION HOOK: Copper boosts medal collection
+            combo += 5;
+            comboTimer = 120;
             const multiplier = (activeCompanion) ? activeCompanion.scoreMultiplier : 1.0;
-            score += (400 * (1 + (speed/15))) * multiplier; 
+            score += (400 * multiplier) * (1 + (combo * 0.05)); 
             medals.splice(i, 1);
         }
         if (m.y > canvas.height) medals.splice(i, 1);
@@ -138,20 +148,36 @@ function draw() {
         ctx.beginPath(); ctx.moveTo(x, 0); ctx.lineTo(x, canvas.height); ctx.stroke();
     }
 
+    if (!gameStarted) {
+        // SPLASH SCREEN STATE
+        ctx.fillStyle = 'rgba(0,0,0,0.7)';
+        ctx.fillRect(0, 0, canvas.width, canvas.height);
+        ctx.fillStyle = '#fff'; ctx.font = '24px "Press Start 2P"'; ctx.textAlign = "center";
+        ctx.fillText("NOODLE DRIFT", canvas.width/2, 300);
+        ctx.fillStyle = '#ff00ff'; ctx.font = '10px "Press Start 2P"';
+        ctx.fillText("FOUR SWORDS EDITION", canvas.width/2, 330);
+        ctx.fillStyle = '#00ffff'; ctx.fillText("TAP OR PRESS SPACE TO START", canvas.width/2, 450);
+        if (typeof activeCompanion !== 'undefined' && activeCompanion) {
+            ctx.fillStyle = '#fff'; ctx.fillText(`EQUIPPED: ${activeCompanion.name}`, canvas.width/2, 500);
+        }
+        return; 
+    }
+
     // Particles
     steam.forEach(p => {
         ctx.fillStyle = `rgba(255, 255, 255, ${p.life * 0.4})`;
         ctx.beginPath(); ctx.arc(p.x, p.y, p.size, 0, Math.PI*2); ctx.fill();
     });
 
-    // Player
+    // Player - High Combo Glow
+    if (combo > 10) { ctx.shadowBlur = 20; ctx.shadowColor = '#00ffff'; }
     ctx.save();
     let px = player.x + player.w/2;
     let py = player.y + player.h/2;
     ctx.translate(px, py);
     ctx.rotate(player.rotation);
     ctx.drawImage(bowlImg, -player.w/2, -player.h/2, player.w, player.h);
-    ctx.fillStyle = '#fff'; ctx.shadowBlur = 10; ctx.shadowColor = '#0ff';
+    ctx.fillStyle = '#fff';
     ctx.beginPath(); ctx.arc(0, 0, player.hitboxRadius, 0, Math.PI*2); ctx.fill();
     ctx.restore(); ctx.shadowBlur = 0;
 
@@ -176,38 +202,44 @@ function draw() {
     });
 
     // COMPANION HUD OVERLAY
-    if (activeCompanion) {
+    if (typeof activeCompanion !== 'undefined' && activeCompanion) {
         ctx.fillStyle = 'rgba(0, 255, 255, 0.1)';
         ctx.strokeStyle = '#00ffff';
         ctx.lineWidth = 2;
         ctx.fillRect(10, 10, 50, 50);
         ctx.strokeRect(10, 10, 50, 50);
-
-        ctx.fillStyle = '#fff';
-        ctx.font = '12px "Press Start 2P"';
-        ctx.textAlign = "center";
-        ctx.fillText(activeCompanion.name[0], 35, 45); // First initial as placeholder
-        
-        ctx.textAlign = "left";
-        ctx.font = '7px "Press Start 2P"';
+        ctx.fillStyle = '#fff'; ctx.font = '12px "Press Start 2P"'; ctx.textAlign = "center";
+        ctx.fillText(activeCompanion.name[0], 35, 45); 
+        ctx.textAlign = "left"; ctx.font = '7px "Press Start 2P"';
         ctx.fillText("BUFF ACTIVE", 70, 25);
-        ctx.fillStyle = '#ff00ff';
-        ctx.fillText(activeCompanion.type, 70, 42);
+        ctx.fillStyle = '#ff00ff'; ctx.fillText(`${activeCompanion.type} (x${(1 + combo * 0.1).toFixed(1)})`, 70, 42);
     }
 
-    // Game Over
+    // COMBO METER
+    if (combo > 0) {
+        ctx.fillStyle = '#fff'; ctx.font = '10px "Press Start 2P"'; ctx.textAlign = "right";
+        ctx.fillText(`${combo}x COMBO`, canvas.width - 20, 30);
+    }
+
+    // Impact End Screen
     if (!gameActive) {
-        ctx.fillStyle = 'rgba(0,0,0,0.85)';
+        ctx.fillStyle = 'rgba(0,0,0,0.9)';
         ctx.fillRect(0,0,canvas.width, canvas.height);
         ctx.fillStyle = '#ff00ff'; ctx.font = '22px "Press Start 2P"'; ctx.textAlign = "center";
-        ctx.fillText("DRIFT OVER", canvas.width/2, 300);
-        ctx.font = '10px "Press Start 2P"'; ctx.fillStyle = '#fff';
-        ctx.fillText("TAP SCREEN TO REBOOT", canvas.width/2, 350);
+        ctx.fillText("DRIFT OVER", canvas.width/2, 250);
+        const impact = Math.floor(score / IMPACT_RATIO);
+        ctx.fillStyle = '#00ffff'; ctx.font = '12px "Press Start 2P"';
+        ctx.fillText(`IMPACT: ${impact} PTS`, canvas.width/2, 320);
+        ctx.font = '8px "Press Start 2P"'; ctx.fillStyle = '#fff';
+        ctx.fillText("FOR UPAWS & MARQUETTE AID", canvas.width/2, 350);
+        ctx.strokeStyle = '#00ffff'; ctx.strokeRect(canvas.width/2 - 40, 380, 80, 80); 
+        ctx.font = '7px "Press Start 2P"'; ctx.fillText("SCAN TO SYNC", canvas.width/2, 480);
+        ctx.font = '10px "Press Start 2P"'; ctx.fillText("TAP TO REBOOT", canvas.width/2, 550);
         canvas.onclick = () => location.reload();
     }
 }
 
 function loop() {
     update(); draw(); spawn();
-    if (gameActive) requestAnimationFrame(loop);
+    requestAnimationFrame(loop);
 }
